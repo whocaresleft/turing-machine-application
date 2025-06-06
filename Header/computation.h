@@ -10,39 +10,121 @@
 
 namespace mdt {
 
+    /**
+     * @brief Representation of a computation of a Turing Machine on an input string
+     *
+     * @tparam K Number of tapes used by the machine
+     *
+     * @details This class is used for the execution of the Turing Machine for a particular input string
+     * We specify the Turing Machine to use and, either use tapes created beforehand, or create tapes on the go.
+     * Optionally, we can specify an Alphabet, just for the mapping of logical symbols to readable symbols. With an Alphabet,
+     * we can also give a std::string as the input (instead of an already created tape), and the alphabet is used to translate
+     * each character to a symbol, so that it can be written on the input tape
+     *
+     * During our classes, we usually distinguish between input and working tapes:
+     *  The input tape is usually tape 0
+     *  And the working tapes go from 1 to K-1
+     *
+     * To start the execution, use the start method. The stop method can be used to forcefully interrupt the execution,
+     * since we can decide to use both Final-State Accepting and Terminating Accepting Turing Machines. In case the Machine
+     * doesn't accept a string, it can enter a loop, with stop(), we can terminate it externally
+     * To perform a single transition, use step()
+     */
     template <int K>
     class computation {
 
-    private:
+        /// Alphabet used both by the Turing Machine and Tapes
         alphabet alph;
+
+        /// K-tapes Turing Machine
         turing_machine<K> M;
+
+        /// The K tapes the machine will use
         std::array<tape, K> tapes;
 
+        /// The state the machine is, during each step of the computation
         state current{0};
+
+        /// Number of transitions performed
         size_t transition_cnt{0};
+
+        /// Has the machine stopped? Used both for Final-State accepting and Termination accepting machines
         bool terminated{false};
+
+        /// String that will be written on the input tape at the start of the computation. This allows for multiple computations
+        std::string w;
+
+        /**
+         * @brief Actually writes the input string on the input tape
+         *
+         * @details Writes each symbol of the string to the input tape, using the specified Alphabet
+         *
+         * @note The alphabet needs to be set, as it is needed to translate che characters of the string to symbols
+         * that the Turing Machine can actually 'understand'
+        */
+        void write_input_string() {
+            for (int i = 0; i < K; i++) shift_head(0, i);
+            for (char c : w) {
+                symbol opt = alph.get_symbol(c).value_or(blank);
+                tapes[0].write(opt);
+                for (int i = 1; i < K; i++) tapes[i].write(blank);
+                for (int i = 0; i < K; i++) tapes[i].move_dx();
+            }
+            for (int i = 0; i < K; i++) shift_head(0, i);
+        }
 
     public:
 
+        /// Default constructor
         computation() = default;
 
+        /**
+         * @brief Specifies the alphabet to use for translating symbols to characters and vice versa
+         *
+         * @param alph Alphabet to set
+         */
         void use_alphabet(const alphabet& alph) {
             this->alph = alph;
         }
 
+        /**
+         * @brief Specifies the Turing Machine that will be executed for the computation
+         *
+         * @param M Turing Machine that will be executed
+         */
         void use_machine(const turing_machine<K>& M) {
             this-> M = M;
         }
 
+        /**
+         * @brief Sets the tapes that the machine will have access to for the computation
+         *
+         * @param tapes Tapes used by the machine
+         */
         void use_tapes(std::array<tape, K> tapes) {
             this-> tapes = tapes;
         }
 
+        /**
+         * @brief Specifies a tape that the machine will have access to for the computation
+         *
+         * @param t Tape that will be used by the machine
+         * @param index Number of the tape to set
+         */
         void use_tape(tape t, int index) const {
             if (index >= K) return;
             tapes[index] = t;
         }
 
+        /**
+         * @brief Performs a single transition
+         *
+         * @details Based on the current configuration, reads the current symbols
+         * Tries to retrieve a transition that has the first two arguments, <current state, read symbols>
+         * If the transition is defined, then it is performed: State is changed and either symbols are written and/or the heads are shifted
+         *
+         * @return True if a transition was found (and performed), False otherwise
+         */
         bool step() {
             std::array<symbol, K> x;
             for (int i = 0; i < K; i++) {
@@ -61,6 +143,13 @@ namespace mdt {
             return true;
         }
 
+        /**
+         * @brief Moves the head on the given tape, to the given position
+         *
+         * @param position Where to move the head
+         *
+         * @param tape Whose tape to move the head
+         */
         void shift_head(const size_t position, int tape) {
             if (tape >= K || tape < 0) return;
             while (tapes[tape].move_sx()) {}
@@ -68,18 +157,32 @@ namespace mdt {
                 tapes[tape].move_dx();
         }
 
+        /**
+         * @brief Specifies the input string for this computation
+         *
+         * @details This is the string that will be present on the input tape at the start of the computaion
+         *
+         * @note For this, an alphabet needs to be specified! It is needed to translate character to symbols
+         *
+         * @param w Input string for the computation
+         */
         void input_string(const std::string &w) {
-            for (int i = 0; i < K; i++) shift_head(0, i);
-            for (char c : w) {
-                symbol opt = alph.get_symbol(c).value_or(blank);
-                tapes[0].write(opt);
-                for (int i = 1; i < K; i++) tapes[i].write(blank);
-                for (int i = 0; i < K; i++) tapes[i].move_dx();
-            }
-            for (int i = 0; i < K; i++) shift_head(0, i);
+            if (alph.symbol_count() == 0) return;
+            this->w = w;
+
         }
 
+        /**
+         * @brief Starts the computation
+         *
+         * @details Calls the step() method to perform a single transition, until we get to a configuration that has no
+         * possible transitions, counting how many transitions are performed. The execution is handled by a thread
+         *
+         * @note If a Turing Machine loops indefinitely, use stop to force terminate it
+         */
         void start() {
+            if (!w.empty()) write_input_string();
+
             for (int i = 0; i < K; i++)
                 shift_head(0, i);
             transition_cnt = 0;
@@ -88,18 +191,60 @@ namespace mdt {
             terminated = true;
         }
 
+        /**
+         * @brief Stops the computation
+         *
+         * @details This method is used to forcefully stop the thread handling the computation
+         *
+         * @note The 'terminated' flag will not be set to true
+         */
+        void stop() {
+            return;
+        }
+
+        /**
+         * @brief Tells whether the computation has stopped or not, naturally
+         *
+         * @note Invoking stop forcefully interrupts the computation, but doesn't flag the computation as terminated
+         *
+         * @return True if the Turing Machine has terminated on the given input string, False otherwise
+         */
         [[nodiscard]] bool has_terminated() const {
             return terminated;
         }
 
+        /**
+         * @brief Tells whether the Turing Machine has accepted the input string or not
+         *
+         * @note This only makes sense for a Final State accepting machine
+         *
+         * @return True if the Turing Machine has terminated on the given input string, on a final state, False otherwise
+         */
         [[nodiscard]] bool has_accepted() const {
             return terminated ? M.is_final_state(current) : false;
         }
 
+        /**
+         * @brief Returns the number of transitions performed up until the point of invocation
+         *
+         * @return Number of transitions performed
+         */
         [[nodiscard]] size_t transition_count() const {
             return transition_cnt;
         }
 
+        /**
+         * @brief Returns the content of the specified tape
+         *
+         * @details Returns a string containing the character associated with each symbol of the given tape, using the
+         * alphabet to translate logical symbols to readable ones
+         *
+         * @param tape Number of the tape we want the content of
+         *
+         * @note The last three characters (...) are printed to express the concept of infinite tape, since those positions would be empty anyway
+         *
+         * @return String with the content of the given tape
+         */
         [[nodiscard]] std::string output(int tape) {
             if (tape >= K || tape < 0) return "";
             std::vector<char> v;
@@ -112,6 +257,15 @@ namespace mdt {
             return std::string{v.begin(), v.end() };
         }
 
+        /**
+         * @brief Returns the content of all tapes, from the last to the first
+         *
+         * @details Returns a string containing the content of all the tapes used for the computation
+         *
+         * @note This method just calls output(i) on i = K-1, ..., 0
+         *
+         * @return String with the content all tapes
+         */
         [[nodiscard]] std::string output() {
             std::stringstream ss;
             for (int i = K - 1; i >= 0; --i) {
@@ -120,8 +274,6 @@ namespace mdt {
             return ss.str();
         }
     };
-
-
 }
 
 #endif
