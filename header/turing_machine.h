@@ -241,8 +241,8 @@ namespace mdt {
          * @details This representation is an extension of the one I've learnt during the course. Since each symbol and state
          * can be indexed, it can be represented, in binary, through its index, in unary. (n in base 10 is n+1 ones in base 1)
          *
-         * The representation has this form: consider s states and r symbols
-         *  1^{s + 1}01^{r + 1}0000<transition{1}>000<transition{2}>000...000<transition{m}0000
+         * The representation has this form: consider s states and r symbols and k tapes, and final states qx, qy and qz
+         *  1^{k + 1}001^{s + 1}001^{r + 1}001^{x + 1}01^{y + 1}01^{z + 1}0000<transition{1}>000<transition{2}>000...000<transition{m}0000
          *
          *  Where each <transition{i}> is represented as follows:
          *   Suppose the transition is (q{i} (a{j1}, ..., a{jK}) (a{z1}, ..., a{zK}) q{t}), where K is the number of tapes
@@ -250,11 +250,20 @@ namespace mdt {
          *
          * @return A string with the specified representation of this Turing Machine
          */
-        [[nodiscard]] std::string binary_representation() const {
+        [[nodiscard]] std::string to_binary_representation() const {
             const size_t n = transitions.size();
 
             std::vector<char> binr;
-            binr.reserve( (state_count + symbol_count + 9) + n * (1 + 2 * state_count + 2 * K * (symbol_count + 1)));
+            const size_t w = final_states.size();
+            binr.reserve( (state_count + symbol_count + w * (state_count + 1) + 13) + n * (1 + 2 * state_count + 2 * K * (symbol_count + 1)));
+
+            // Number of tapes
+            for (int i = 0; i <= K; i++)
+                binr.push_back('1');
+
+            // Separator
+            binr.push_back('0');
+            binr.push_back('0');
 
             // Number of states
             for (int i  = 0; i < state_count + 1; i++)
@@ -262,13 +271,24 @@ namespace mdt {
 
             // Separator
             binr.push_back('0');
+            binr.push_back('0');
 
             // Number of symbols
-            for (int i = 1; i < symbol_count + 1; i++)
+            for (int i = 0; i < symbol_count + 1; i++)
                 binr.push_back('1');
 
-            // List of transitions [Start]
+            // Separator
             binr.push_back('0');
+            binr.push_back('0');
+
+            // Final states
+            for (const state f : final_states) {
+                for (int i = 0; i <= f; i++)
+                    binr.push_back('1');
+                binr.push_back('0');
+            }
+
+            // List of transitions [Start]
             binr.push_back('0');
             binr.push_back('0');
             binr.push_back('0');
@@ -311,6 +331,111 @@ namespace mdt {
             binr.push_back('0');
 
             return std::string{binr.begin(), binr.end()};
+        }
+
+        /**
+         * @brief Tries to initialize a Turing Machine from a given binary representation
+         *
+         * @details Tries to parse the binary string in order to recreate the machine it describes. In order for a successful
+         * initialization, the string needs to be of the format specified in the 'to_binary_representation' method
+         *
+         * @see to_binary_representation
+         */
+        void from_binary_representation(std::string binary_rep) {
+            std::string::iterator it = binary_rep.begin();
+
+            // Check for the number of tapes
+            int k = -1;
+            while (*it == '1') {
+                ++k;
+                ++it;
+            }
+            if (k != K) return; // Wrong number of tapes. Would parse an incorrect machine
+            ++it;
+            ++it;
+
+            // Number of states
+            this->state_count = -1;
+            while (*it == '1') {
+                ++this->state_count;
+                ++it;
+            }
+
+            ++it;
+            ++it;
+
+            // Number of symbols
+            this->symbol_count = -1;
+            while (*it == '1') {
+                ++this->symbol_count;
+                ++it;
+            }
+
+            ++it;
+            ++it;
+
+            // Final states
+            state f = -1;
+            while (true) {
+                if (*it == '0') break;
+                while (*it == '1') {
+                    ++f;
+                    ++it;
+                }
+                ++it;
+                this->add_final_state(f);
+            }
+
+            ++it;
+            ++it;
+            ++it;
+
+            couple<int, std::array<int, K>> in, out;
+            while (true) {
+                if (*it == '0') break;
+                in.first = -1;
+                while (*it == '1') {
+                    ++in.first;
+                    ++it;
+                }
+
+                ++it;
+                ++it;
+
+                in.second.fill(-1);
+                for (int i = 0; i < K; i++) {
+                    while (*it == '1') {
+                        ++in.second[i];
+                        ++it;
+                    }
+                    ++it;
+                }
+
+                ++it;
+
+
+                out.second.fill(-1);
+                for (int i = 0; i < K; i++) {
+                    while (*it == '1') {
+                        ++out.second[i];
+                        ++it;
+                    }
+                    ++it;
+                }
+
+                ++it;
+
+                out.first = -1;
+                while (*it == '1') {
+                    ++out.first;
+                    ++it;
+                }
+
+                ++it;
+                ++it;
+                ++it;
+                this->add_transition(in.first, in.second, out.second, out.first);
+            }
         }
     };
 }

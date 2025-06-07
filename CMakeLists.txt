@@ -9,4 +9,5 @@ add_executable(mdt main.cpp
         Header/alphabet.h
         Header/Tape.h
         Header/turing_machine.h
-        Header/computation.h)
+        Header/computation.h
+        Header/helper.h)

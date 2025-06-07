@@ -7,6 +7,12 @@
 #include "turing_machine.h"
 #include <string>
 #include <sstream>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
+#include <atomic>
+#include <stop_token>
+#include <future>
 
 namespace mdt {
 
@@ -48,35 +54,31 @@ namespace mdt {
         /// Number of transitions performed
         size_t transition_cnt{0};
 
-        /// Has the machine stopped? Used both for Final-State accepting and Termination accepting machines
-        bool terminated{false};
+        std::mutex mtx;
+
+        std::condition_variable cv;
+
+        /// Is the computation currently suspended? It can be resumed later
+        std::atomic<bool> paused{false};
+
+        /// Was the machine stopped from outside? This is used to determine if a computation was forcefully interrupted
+        std::atomic<bool> stopped{false};
+
+        /// Has the machine stopped on its own? Used both for Final-State accepting and Termination accepting machines
+        std::atomic<bool> terminated{false};
+
+        /// Thread that handles the execution of the computation
+        std::jthread worker;
+        std::promise<void> done_promise;
+        std::future<void> done_future;
 
         /// String that will be written on the input tape at the start of the computation. This allows for multiple computations
         std::string w;
 
-        /**
-         * @brief Actually writes the input string on the input tape
-         *
-         * @details Writes each symbol of the string to the input tape, using the specified Alphabet
-         *
-         * @note The alphabet needs to be set, as it is needed to translate che characters of the string to symbols
-         * that the Turing Machine can actually 'understand'
-        */
-        void write_input_string() {
-            for (int i = 0; i < K; i++) shift_head(0, i);
-            for (char c : w) {
-                symbol opt = alph.get_symbol(c).value_or(blank);
-                tapes[0].write(opt);
-                for (int i = 1; i < K; i++) tapes[i].write(blank);
-                for (int i = 0; i < K; i++) tapes[i].move_dx();
-            }
-            for (int i = 0; i < K; i++) shift_head(0, i);
-        }
-
     public:
 
         /// Default constructor
-        computation() = default;
+        computation() : done_future{done_promise.get_future()} {};
 
         /**
          * @brief Specifies the alphabet to use for translating symbols to characters and vice versa
@@ -132,7 +134,10 @@ namespace mdt {
             }
 
             const std::optional out = M.get_transition(current, x);
-            if (!out.has_value()) return false;
+            if (!out.has_value()) {
+                terminated = true;
+                return false;
+            }
             x = out.value().second;
             for (int i = 0; i < K; i++) {
                 if (x[i] == M.dx()) tapes[i].move_dx();
@@ -182,13 +187,50 @@ namespace mdt {
          */
         void start() {
             if (!w.empty()) write_input_string();
+            worker = std::jthread([this](std::stop_token st) {
+                for (int i = 0; i < K; i++)
+                    shift_head(0, i);
+                transition_cnt = 0;
 
-            for (int i = 0; i < K; i++)
-                shift_head(0, i);
-            transition_cnt = 0;
-            while (step())
-                transition_cnt++;
-            terminated = true;
+               while (!stopped && !st.stop_requested() && !terminated) {
+                   {
+                       std::unique_lock<std::mutex> lock(mtx);
+                       cv.wait(lock, [this, &st] {
+                          return !paused || st.stop_requested();
+                       });
+                   }
+                   if (stopped || st.stop_requested()) break;
+                   step();
+                   transition_cnt++;
+               }
+                done_promise.set_value();
+            });
+        }
+
+        /**
+         * @bried Paused the execution of this Turing Machine
+         */
+        void pause() {
+            if (!terminated && !stopped) paused = true;
+        }
+
+        /**
+         * @brief Waits for the termination of the computation
+         */
+        void wait_for_termination() const {
+            done_future.wait();
+        }
+
+        /**
+         * @brief Resumes the execution of a previously paused Turing Machine
+         */
+        void resume() {
+            if (!paused || stopped || terminated) return;
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                paused = false;
+            }
+            cv.notify_all();
         }
 
         /**
@@ -196,10 +238,11 @@ namespace mdt {
          *
          * @details This method is used to forcefully stop the thread handling the computation
          *
-         * @note The 'terminated' flag will not be set to true
+         * @note The 'terminated' flag will not be set to true, but 'stopped' will
          */
         void stop() {
-            return;
+            stopped = true;
+            cv.notify_all();
         }
 
         /**
@@ -225,6 +268,22 @@ namespace mdt {
         }
 
         /**
+         * @brief Tells whether the Turing Machine is currently paused or not
+         *
+         * @return True if the Turing Machine is mid-computation, and paused, False otherwise
+         */
+        [[nodiscard]] bool is_paused() const {
+            return paused;
+        }
+
+        /**
+         * @brief Tells whether the Turing Machine was forcefully stopped or not
+         */
+        [[nodiscard]] bool was_stopped() const {
+            return stopped;
+        }
+
+        /**
          * @brief Returns the number of transitions performed up until the point of invocation
          *
          * @return Number of transitions performed
@@ -239,22 +298,41 @@ namespace mdt {
          * @details Returns a string containing the character associated with each symbol of the given tape, using the
          * alphabet to translate logical symbols to readable ones
          *
-         * @param tape Number of the tape we want the content of
+         * @param index Number of the tape we want the content of
          *
          * @note The last three characters (...) are printed to express the concept of infinite tape, since those positions would be empty anyway
          *
          * @return String with the content of the given tape
          */
-        [[nodiscard]] std::string output(int tape) {
-            if (tape >= K || tape < 0) return "";
+        [[nodiscard]] std::string output(int index) {
+            if (index >= K || index < 0) return "";
             std::vector<char> v;
-            v.reserve(tapes[tape].size() + 3);
-            for (symbol s : tapes[tape].get_content())
+            v.reserve(tapes[index].size() + 3);
+            for (symbol s : tapes[index].get_content())
                 v.push_back(alph.get_representation(s).value_or(alphabet::blank_char));
             v.push_back('.');
             v.push_back('.');
             v.push_back('.');
             return std::string{v.begin(), v.end() };
+        }
+
+        /**
+         * @brief Actually writes the input string on the input tape
+         *
+         * @details Writes each symbol of the string to the input tape, using the specified Alphabet
+         *
+         * @note The alphabet needs to be set, as it is needed to translate che characters of the string to symbols
+         * that the Turing Machine can actually 'understand'
+        */
+        void write_input_string() {
+            for (int i = 0; i < K; i++) shift_head(0, i);
+            for (char c : w) {
+                symbol opt = alph.get_symbol(c).value_or(blank);
+                tapes[0].write(opt);
+                for (int i = 1; i < K; i++) tapes[i].write(blank);
+                for (int i = 0; i < K; i++) tapes[i].move_dx();
+            }
+            for (int i = 0; i < K; i++) shift_head(0, i);
         }
 
         /**

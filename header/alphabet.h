@@ -2,6 +2,7 @@
 #define ALPHABET_H
 
 #include <optional>
+#include <vector>
 #include <unordered_map>
 #include "definitions.h"
 
@@ -50,7 +51,7 @@ namespace mdt {
          *
          * @see add_symbol method
          */
-        void add_symbols(const std::set<char>& symbols) {
+        void add_symbols(const std::vector<char>& symbols) {
             for (const char s : symbols) {
                 add_symbol(s);
             }

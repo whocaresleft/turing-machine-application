@@ -80,7 +80,7 @@ namespace mdt {
          */
         bool move_dx() {
             if (head == max_size) return false;
-            content.push_back(blank);
+            if (head == content.size()) content.push_back(blank);
             head++;
             return true;
         }
@@ -104,6 +104,10 @@ namespace mdt {
          */
         [[nodiscard]] size_t size() const {
             return content.size();
+        }
+
+        [[nodiscard]] std::vector<symbol> get_content() {
+            return content;
         }
     };
 }
