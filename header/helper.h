@@ -292,11 +292,29 @@ namespace mdt {
      *
      * @param j_tm Json containing the Turing Machine's info
      *
-     * @return Corresponding Turing Machine
+     * @return Corresponding Turing Machine, or null optional if the number of tapes wasn't coherent
      */
     template <int K>
-    static turing_machine<K> deserialize_turing_machine(json j_tm) {
-        return turing_machine<K>(0,0);
+    static std::optional<turing_machine<K>> deserialize_turing_machine(json j_tm) {
+
+        if (K != j_tm["#Tapes"].get<int>()) return std::nullopt;
+        int states = j_tm["#States"].get<int>();
+        int symbols = j_tm["#Symbols"].get<int>();
+        turing_machine<K> M(states, symbols);
+        std::set<state> finals = j_tm["FStates"].get<std::set<state>>();
+        M.add_final_states(finals);
+
+        json transitions = j_tm["Transitions"].get<json>();
+        std::array<symbol, K> x, a;
+        for (auto w = transitions.begin(); w != transitions.end(); ++w) {
+            state q = (*w)["q"].get<state>();
+            x = (*w)["x"].get<std::array<symbol, K>>();
+            state t = (*w)["t"].get<state>();
+            a = (*w)["a"].get<std::array<symbol, K>>();
+            M.add_transition(q, x, a, t);
+        }
+
+        return M;
     }
 
     /**
