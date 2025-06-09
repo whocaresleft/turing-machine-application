@@ -46,7 +46,7 @@ add_executable(turing_machine_creator source/gui_app.cpp
         header/gui_app_helpers.h
 )
 #idk how to on linux, will look at it later
-set_target_properties(turing_machine_creator PROPERTIES WIN32_EXECUTABLE TRUE)
+#set_target_properties(turing_machine_creator PROPERTIES WIN32_EXECUTABLE TRUE)
 add_executable(binary_generator source/generate_binary.cpp)
 
 # JSON, ImGui and GLFW

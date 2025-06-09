@@ -29,7 +29,7 @@ namespace gui_app {
     int FSM::next_link_id = 20000;
     char FSM::content[500];
 }
-void draw_self_loop(ImDrawList* draw_list, const ImVec2 node_pos, const char* label, const ImU32 color, const float thickness);
+void draw_self_loop(ImDrawList* draw_list, const ImVec2 node_pos, Transition t, const ImU32 color, const float thickness);
 int main () {
     const char a = '\0';
     strncpy(FSM::content, &a, 500);
@@ -149,6 +149,39 @@ int main () {
                     ImGuiFileDialog::Instance()->Close();
                 }
 
+                // Add one more transition
+                ImGui::SameLine();
+                bool one_selected = (ImNodes::NumSelectedLinks() == 1) ^ (ImNodes::NumSelectedNodes() == 1);
+                ImGui::BeginDisabled(!one_selected);
+                if (ImGui::Button("+") && one_selected) {
+                    if (ImNodes::NumSelectedLinks() == 1) {
+                        int link_id;
+                        ImNodes::GetSelectedLinks(&link_id);
+                        FSM::one_more_label(link_id, false);
+                    } else {
+                        int self_loop_id;
+                        ImNodes::GetSelectedNodes(&self_loop_id);
+                        FSM::one_more_label(self_loop_id, true);
+                    }
+                }
+                ImGui::EndDisabled();
+
+                // Remove one transition
+                ImGui::SameLine();
+                ImGui::BeginDisabled(!one_selected);
+                if (ImGui::Button("-") && one_selected) {
+                    if (ImNodes::NumSelectedLinks() == 1) {
+                        int link_id;
+                        ImNodes::GetSelectedLinks(&link_id);
+                        FSM::one_less_label(link_id, false);
+                    } else {
+                        int self_loop_id;
+                        ImNodes::GetSelectedNodes(&self_loop_id);
+                        FSM::one_less_label(self_loop_id, true);
+                    }
+                }
+                ImGui::EndDisabled();
+
                 ImGui::EndChild();
                 /*-------------------*/
                 /*-----Sub panel 2-----*/
@@ -204,7 +237,7 @@ int main () {
                     bool ascending = FSM::from_pin(t.from_state).value().id.state_id < FSM::from_pin(t.to_state).value().id.state_id;
 
                     // Adjust for text size (centering)
-                    const ImVec2 text_size = ImGui::CalcTextSize(t.label_buffer);
+                    const ImVec2 text_size = ImGui::CalcTextSize(t.labels[0].data());
                     ImVec2 text_pos = ascending ? ImVec2(
                         midpoint.x - text_size.x * 0.5f,
                         midpoint.y + text_size.y * 0.5f
@@ -214,12 +247,14 @@ int main () {
                         );
 
                     // Draw the text label
-                    ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                    draw_list->AddText(
-                        text_pos,
-                        IM_COL32(220, 220, 220, 255),  // White color
-                        t.label_buffer
-                    );
+                    for (int i = 0; i < t.labels.size(); i++) {
+                        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                        draw_list->AddText(
+                            text_pos + ImVec2(0, -25 * i),
+                            IM_COL32(220, 220, 220, 255),  // White color
+                            t.labels[i].data()
+                        );
+                    }
                 }
 
                 ImNodes::EndNodeEditor();
@@ -227,7 +262,7 @@ int main () {
                 // Draw self loop links, I do it here so it draws a bit of the transition behind the state and not on top
                 for (const Transition& t : FSM::self_loops) {
                     const ImVec2 pos = ImNodes::GetNodeScreenSpacePos(t.id);
-                    draw_self_loop(ImGui::GetWindowDrawList(), pos, t.label_buffer,IM_COL32(55, 112, 185, 245), 2.0f);
+                    draw_self_loop(ImGui::GetWindowDrawList(), pos, t,IM_COL32(55, 112, 185, 245), 2.0f);
                 }
 
                 // Handle link creation
@@ -256,17 +291,25 @@ int main () {
                 ImGui::BeginChild("transition-list", ImVec2(290, 450), true);
                 for (const auto & transition : FSM::transitions) {
                     ImGui::PushID(transition.id);
-                    ImGui::Text("%s => %s", FSM::from_pin(transition.from_state).value().label.c_str() , FSM::from_pin(transition.to_state).value().label.c_str());
-                    ImGui::SameLine();
-                    ImGui::InputText("", transition.label_buffer, 128);
+                    for (int i = 0; i < transition.labels.size(); i++) {
+                        ImGui::PushID(i);
+                        ImGui::Text("%s => %s", FSM::from_pin(transition.from_state).value().label.c_str() , FSM::from_pin(transition.to_state).value().label.c_str());
+                        ImGui::SameLine();
+                        ImGui::InputText("", transition.labels[i].data(), 128);
+                        ImGui::PopID();
+                    }
                     ImGui::Separator();
                     ImGui::PopID();
                 }
                 for(const auto & self : FSM::self_loops) {
                     ImGui::PushID(self.id);
-                    ImGui::Text("%s => %s", FSM::from_pin(self.from_state).value().label.c_str(), FSM::from_pin(self.from_state).value().label.c_str());
-                    ImGui::SameLine();
-                    ImGui::InputText("", self.label_buffer, 128);
+                    for (int i = 0; i < self.labels.size(); i++) {
+                        ImGui::PushID(i);
+                        ImGui::Text("%s => %s", FSM::from_pin(self.from_state).value().label.c_str() , FSM::from_pin(self.from_state).value().label.c_str());
+                        ImGui::SameLine();
+                        ImGui::InputText("", self.labels[i].data(), 128);
+                        ImGui::PopID();
+                    }
                     ImGui::Separator();
                     ImGui::PopID();
                 }
@@ -309,7 +352,7 @@ int main () {
     return 0;
 }
 
-void draw_self_loop(ImDrawList* draw_list, const ImVec2 node_pos, const char* label, const ImU32 color, const float thickness) {
+void draw_self_loop(ImDrawList* draw_list, const ImVec2 node_pos, Transition t, const ImU32 color, const float thickness) {
     const ImVec2 start = node_pos + ImVec2(20, 20);
     const ImVec2 end = node_pos + ImVec2(0, 20);
     const ImVec2 control1 = node_pos + ImVec2(50, -60);
@@ -324,11 +367,13 @@ void draw_self_loop(ImDrawList* draw_list, const ImVec2 node_pos, const char* la
     ImVec2 p3 = end + ImVec2(norm.y, -norm.x) * 6.0f - norm * 10.0f;
 
     // Draw the text label
-    draw_list->AddText(
-        node_pos + ImVec2(-20, -75),
-        IM_COL32(220, 220, 220, 255),
-        label
-    );
+    for (int i = 0; i < t.labels.size(); i++) {
+        draw_list->AddText(
+            node_pos + ImVec2(-20, -75) + ImVec2(0, -25 * i),
+            IM_COL32(220, 220, 220, 255),
+            t.labels[i].data()
+        );
+    }
 
     draw_list->AddBezierCubic(start, control1, control2, end, color, thickness);
     draw_list->AddTriangleFilled(p1, p2, p3, color);

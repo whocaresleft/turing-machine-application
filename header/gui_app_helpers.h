@@ -36,7 +36,7 @@ namespace gui_app {
     };
 
     struct Transition {
-        mutable char label_buffer[128];
+        mutable std::vector<std::array<char, 128>> labels;
         int id;
         int from_state;
         int to_state;
@@ -51,7 +51,7 @@ namespace gui_app {
 
 
         static StateId get_next_node_ids() {
-            StateId id;
+            StateId id{};
             id.state_id = next_node_id;
             id.in_id = next_node_id + 1;
             id.out_id = next_node_id + 2;
@@ -108,7 +108,7 @@ namespace gui_app {
 
             Transition t{};
             constexpr char a = '\0';
-            strncpy(t.label_buffer, &a, 128);
+            t.labels.push_back(std::array<char, 128>{a});
             t.id = get_next_link_id();
             t.from_state = from_state;
             t.to_state = to_state;
@@ -156,7 +156,7 @@ namespace gui_app {
 
             Transition t{};
             constexpr char a = '\0';
-            strncpy(t.label_buffer, &a, 128);
+            t.labels.push_back(std::array<char, 128>{a});
             t.id = state_id;
             t.from_state = state_id + 2;
             t.to_state = state_id + 1;
@@ -191,26 +191,30 @@ namespace gui_app {
             if (temp.begin() == temp.end()) return std::optional<mdt::alphabet>();
 
             std::vector<Transition>::iterator it = temp.begin();
-            int first_K = determine_K(std::string{it->label_buffer});
+            int first_K = determine_K(it->labels[0].data());
 
             mdt::alphabet A;
             for (it = transitions.begin(); it != transitions.end(); ++it) {
                 // For each transition, check that it has a consistent number of symbols, if it does, initialize the alphabet, otherwise cancel
-                if (determine_K(std::string{it->label_buffer}) != first_K) return std::nullopt;
-                for (char c : it->label_buffer) {
-                    if (c == '\0') break;
-                    if (c == '/' || c == '*' || c == 'R' || c == 'L') continue;
-                    A.add_symbol(c);
+                for (auto ww : it->labels) {
+                    if (determine_K(ww.data()) != first_K) return std::nullopt;
+                    for (char c : ww) {
+                        if (c == '\0') break;
+                        if (c == '/' || c == '*' || c == 'R' || c == 'L') continue;
+                        A.add_symbol(c);
+                    }
                 }
             }
 
             for (it = self_loops.begin() ; it != self_loops.end(); ++it) {
                 // For each transition, check that it has a consistent number of symbols, if it does, initialize the alphabet, otherwise cancel
-                if (determine_K(std::string{it->label_buffer}) != first_K) return std::nullopt;
-                for (char c : it->label_buffer) {
-                    if (c == '\0') break;
-                    if (c == '/' || c == '*' || c == 'R' || c == 'L') continue;
-                    A.add_symbol(c);
+                for (auto ww : it->labels) {
+                    if (determine_K(ww.data()) != first_K) return std::nullopt;
+                    for (char c : ww) {
+                        if (c == '\0') break;
+                        if (c == '/' || c == '*' || c == 'R' || c == 'L') continue;
+                        A.add_symbol(c);
+                    }
                 }
             }
             return A;
@@ -222,10 +226,10 @@ namespace gui_app {
 
             int K;
             if (transitions.begin() != transitions.end())
-                K = determine_K(std::string{transitions.begin()->label_buffer});
+                K = determine_K(std::string{transitions.begin()->labels[0].data()});
             else
                 if (self_loops.begin() != self_loops.end())
-                    K = determine_K(std::string{self_loops.begin()->label_buffer});
+                    K = determine_K(std::string{self_loops.begin()->labels[0].data()});
                 else
                     return;
 
@@ -250,62 +254,73 @@ namespace gui_app {
             std::vector<Transition>::iterator it;
             for (it = self_loops.begin(); it != self_loops.end(); ++it) {
                 std::vector<int> x;
-
-                std::string::iterator i = std::string{(it->label_buffer)}.begin();
-                for (int j = 0; j < K; ++j) {
-                    if (*i == '*') x.push_back(mdt::blank);
-                    else x.push_back(alph->get_symbol(*i).value());
-                    ++i;
-                }
-                ++i;
                 std::vector<int> a;
-                for (int j = 0; j < K; ++j) {
-                    if (*i == '*') a.push_back(mdt::blank);
-                    else if (*i == 'R') a.push_back( symbols);
-                    else if (*i == 'L') a.push_back( symbols + 1);
-                    else a.push_back(alph->get_symbol(*i).value());
-                    ++i;
-                }
 
-                int q = states_numbers[it->id];
-                json tmp = {
-                    {"q", q},
-                    {"x", x},
-                    {"a", a},
-                    {"t", q}
-                };
-                trans.push_back(tmp);
+                for (std::array<char, 128> label : it->labels) {
+
+                    a.clear();
+                    x.clear();
+
+                    std::array<char, 128>::iterator i = label.begin();
+                    for (int j = 0; j < K; ++j) {
+                        if (*i == '*') x.push_back(mdt::blank);
+                        else x.push_back(alph->get_symbol(*i).value());
+                        ++i;
+                    }
+                    ++i;
+                    for (int j = 0; j < K; ++j) {
+                        if (*i == '*') a.push_back(mdt::blank);
+                        else if (*i == 'R') a.push_back( symbols);
+                        else if (*i == 'L') a.push_back( symbols + 1);
+                        else a.push_back(alph->get_symbol(*i).value());
+                        ++i;
+                    }
+
+                    int q = states_numbers[it->id];
+                    json tmp = {
+                        {"q", q},
+                        {"x", x},
+                        {"a", a},
+                        {"t", q}
+                    };
+                    trans.push_back(tmp);
+                }
             }
 
             for (it = transitions.begin(); it != transitions.end(); ++it) {
-
                 std::vector<int> x;
-
-                std::string::iterator i = std::string{(it->label_buffer)}.begin();
-                for (int j = 0; j < K; ++j) {
-                    if (*i == '*') x.push_back(mdt::blank);
-                    else x.push_back(alph->get_symbol(*i).value());
-                    ++i;
-                }
-                ++i;
                 std::vector<int> a;
-                for (int j = 0; j < K; ++j) {
-                    if (*i == '*') a.push_back(mdt::blank);
-                    else if (*i == 'R') a.push_back( symbols);
-                    else if (*i == 'L') a.push_back( symbols + 1);
-                    else a.push_back(alph->get_symbol(*i).value());
-                    ++i;
-                }
 
-                int q_in = states_numbers[from_pin(it->from_state).value().id.state_id];
-                int q_out = states_numbers[from_pin(it->to_state).value().id.state_id];
-                json tmp = {
-                    {"q", q_in},
-                    {"x", x},
-                    {"a", a},
-                    {"t", q_out}
-                };
-                trans.push_back(tmp);
+                for (std::array<char, 128> label : it->labels) {
+
+                    a.clear();
+                    x.clear();
+
+                    std::array<char, 128>::iterator i = label.begin();
+                    for (int j = 0; j < K; ++j) {
+                        if (*i == '*') x.push_back(mdt::blank);
+                        else x.push_back(alph->get_symbol(*i).value());
+                        ++i;
+                    }
+                    ++i;
+                    for (int j = 0; j < K; ++j) {
+                        if (*i == '*') a.push_back(mdt::blank);
+                        else if (*i == 'R') a.push_back( symbols);
+                        else if (*i == 'L') a.push_back( symbols + 1);
+                        else a.push_back(alph->get_symbol(*i).value());
+                        ++i;
+                    }
+
+                    int q_in = states_numbers[from_pin(it->from_state).value().id.state_id];
+                    int q_out = states_numbers[from_pin(it->to_state).value().id.state_id];
+                    json tmp = {
+                        {"q", q_in},
+                        {"x", x},
+                        {"a", a},
+                        {"t", q_out}
+                    };
+                    trans.push_back(tmp);
+                }
             }
 
             mdt["Transitions"] = trans;
@@ -386,6 +401,44 @@ namespace gui_app {
 
         }
 
+        static void one_more_label(const int link_id, const bool self_loop) {
+            if (self_loop) {
+                for (auto& x : self_loops) {
+                    if (link_id == x.id) {
+                        x.labels.push_back(std::array<char, 128>({'\0'}));
+                        break;
+                    }
+                }
+            }else {
+                for (auto& x : transitions) {
+                    if (link_id == x.id) {
+                        x.labels.push_back(std::array<char, 128>({'\0'}));
+                        break;
+                    }
+                }
+            }
+        }
+
+        static void one_less_label(const int link_id, const bool self_loop) {
+            if (self_loop) {
+                for (auto& x : self_loops) {
+                    if (link_id == x.id) {
+                        if (x.labels.size() == 1) return;
+                        x.labels.pop_back();
+                        break;
+                    }
+                }
+            }else {
+                for (auto& x : transitions) {
+                    if (link_id == x.id) {
+                        if (x.labels.size() == 1) return;
+                        x.labels.pop_back();
+                        break;
+                    }
+                }
+            }
+        }
+
     private:
         static void write_transition(int q, std::vector<int> x, std::vector<int> y, int e, mdt::alphabet a) {
             std::stringstream ss;
@@ -404,10 +457,10 @@ namespace gui_app {
             // self loop
             if (q == e) {
                 FSM::add_self_loop(q * 3 + 1);
-                strncpy(FSM::self_loops.rbegin()->label_buffer, label.c_str(), 128);
+                strncpy(FSM::self_loops.rbegin()->labels[0].data(), label.c_str(), 128);
             } else {
                 FSM::add_transition((q * 3 + 3), (e * 3 + 2));
-                strncpy(FSM::transitions.rbegin()->label_buffer, label.c_str(), 128);
+                strncpy(FSM::transitions.rbegin()->labels[0].data(), label.c_str(), 128);
             }
         }
     };
