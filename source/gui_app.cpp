@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <cstring>
 #include <cmath>
 #include <imnodes/imnodes.h>
 #include "imnodes_internal.h"
@@ -18,10 +19,12 @@ namespace gui_app {
     std::vector<Transition> FSM::self_loops;
     int FSM::next_node_id = 1;
     int FSM::next_link_id = 20000;
+    char FSM::content[500];
 }
 void draw_self_loop(ImDrawList* draw_list, const ImVec2 node_pos, const char* label, const ImU32 color, const float thickness);
 int main () {
-
+    const char a = '\0';
+    strncpy(FSM::content, &a, 500);
     // Init GLFW
     if (!glfwInit()) {
         std::cerr << "Failed to initialize GLFW\n";
@@ -115,13 +118,25 @@ int main () {
                 ImGui::EndDisabled();
 
                 ImGui::SameLine();
-                if (ImGui::Button("Save Machine")) {
-                    ImGuiFileDialog::Instance() -> OpenDialog("save-tm", "Save Machine", ".json", IGFD::FileDialogConfig{.path = ".",});
+                if (ImGui::Button("Save")) {
+                    ImGuiFileDialog::Instance() -> OpenDialog("save-tm", "Save", ".json", IGFD::FileDialogConfig{.path = ".",});
                 }
                 if (ImGuiFileDialog::Instance() -> Display("save-tm")) {
                     if (ImGuiFileDialog::Instance()->IsOk()) {
                         std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
                         FSM::save_all_to_file(file_path);
+                    }
+                    ImGuiFileDialog::Instance()->Close();
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("Load")) {
+                    ImGuiFileDialog::Instance() -> OpenDialog("load-tm", "Load", ".json", IGFD::FileDialogConfig{.path = ".",});
+                }
+                if (ImGuiFileDialog::Instance() -> Display("load-tm")) {
+                    if (ImGuiFileDialog::Instance()->IsOk()) {
+                        std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+                        FSM::load_all_from_file(file_path);
                     }
                     ImGuiFileDialog::Instance()->Close();
                 }
@@ -228,23 +243,36 @@ int main () {
             /*--------------------------------------*/
             ImGui::SameLine();
             /*-----Second panel---------------------*/
-            ImGui::BeginChild("transition-list", ImVec2(300, 520), true);
-            for (const auto & transition : FSM::transitions) {
-                ImGui::PushID(transition.id);
-                ImGui::Text("%s => %s", FSM::from_pin(transition.from_state).value().label.c_str() , FSM::from_pin(transition.to_state).value().label.c_str());
+            ImGui::BeginChild("second-panel", ImVec2(300, 520), true);
+                /*-----Sub panel 1-----*/
+                ImGui::BeginChild("transition-list", ImVec2(290, 450), true);
+                for (const auto & transition : FSM::transitions) {
+                    ImGui::PushID(transition.id);
+                    ImGui::Text("%s => %s", FSM::from_pin(transition.from_state).value().label.c_str() , FSM::from_pin(transition.to_state).value().label.c_str());
+                    ImGui::SameLine();
+                    ImGui::InputText("", transition.label_buffer, 128);
+                    ImGui::Separator();
+                    ImGui::PopID();
+                }
+                for(const auto & self : FSM::self_loops) {
+                    ImGui::PushID(self.id);
+                    ImGui::Text("%s => %s", FSM::from_pin(self.from_state).value().label.c_str(), FSM::from_pin(self.from_state).value().label.c_str());
+                    ImGui::SameLine();
+                    ImGui::InputText("", self.label_buffer, 128);
+                    ImGui::Separator();
+                    ImGui::PopID();
+                }
+                ImGui::EndChild();
+                /*-------------------*/
+                /*-----Sub panel 2-----*/
+                ImGui::BeginChild("input_string", ImVec2(290, 45), true);
+                ImGui::PushID(99999);
+                ImGui::Text("Input:");
                 ImGui::SameLine();
-                ImGui::InputText("", transition.label_buffer, 128);
-                ImGui::Separator();
+                ImGui::InputText("", FSM::content, 500);
                 ImGui::PopID();
-            }
-            for(const auto & self : FSM::self_loops) {
-                ImGui::PushID(self.id);
-                ImGui::Text("%s => %s", FSM::from_pin(self.from_state).value().label.c_str(), FSM::from_pin(self.from_state).value().label.c_str());
-                ImGui::SameLine();
-                ImGui::InputText("", self.label_buffer, 128);
-                ImGui::Separator();
-                ImGui::PopID();
-            }
+                ImGui::EndChild();
+                /*-------------------*/
             ImGui::EndChild();
             /*--------------------------------------*/
         ImGui::End();

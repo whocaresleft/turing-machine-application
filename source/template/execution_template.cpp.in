@@ -1,0 +1,42 @@
+#include "turing_machine.h"
+#include "tape.h"
+#include "alphabet.h"
+#include <nlohmann/json.hpp>
+#include "computation.h"
+#include "helper.h"
+constexpr int K = ${K};
+int main() {return 0;}
+inline int execution(const std::string &machine_file, const std::string &alphabet_file, const std::string &tape_file) {
+
+    json j_machine;
+    mdt::json_from_file(j_machine, machine_file);
+
+    json j_alph;
+    mdt::json_from_file(j_alph, alphabet_file);
+
+    json j_tape;
+    mdt::json_from_file(j_tape, tape_file);
+
+    const std::optional<mdt::turing_machine<K>> opt_m = mdt::deserialize_turing_machine<K>(j_machine);
+    if (!opt_m.has_value()) return -1;
+    mdt::turing_machine<K> M = opt_m.value();
+
+
+    const std::optional<mdt::alphabet> opt_a = mdt::deserialize_alphabet(j_alph);
+    if (!opt_a.has_value()) return -1;
+    mdt::alphabet S = opt_a.value();
+
+    const std::optional<mdt::tape> opt_t = mdt::deserialize_tape(j_tape);
+    if (!opt_t.has_value()) return -1;
+    mdt::tape t = opt_t.value();
+
+    mdt::computation<K> comp;
+    comp.use_alphabet(S);
+    comp.use_tape(t, 0);
+    comp.use_machine(M);
+
+    comp.start();
+    comp.wait_for_termination();
+
+    return 0;
+}

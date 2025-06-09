@@ -123,7 +123,7 @@ namespace mdt {
          * null option otherwise
          */
         [[nodiscard]] std::optional<couple<state, std::array<symbol, K>>> get_transition(const state q, const std::array<symbol, K> x) {
-            return transitions.contains(couple{q,x}) ? std::optional(transitions[couple{q,x}]) : std::nullopt;
+            return (transitions.find(couple{q,x}) != transitions.end()) ? std::optional(transitions[couple{q,x}]) : std::nullopt;
         }
 
         /**

@@ -38,18 +38,17 @@ target_include_directories(imguifiledialogs PUBLIC
         third_party/imguifiledialog/stb
 )
 
-add_executable(main source/gui_app.cpp
+add_executable(turing_machine_creator source/gui_app.cpp
         header/definitions.h
-        header/couple.h
         header/alphabet.h
-        header/Tape.h
-        header/turing_machine.h
-        header/computation.h
+        header/tape.h
         header/helper.h
         header/gui_app_helpers.h
 )
 
-# JSON, ImGui and GLFW
-target_include_directories(main PRIVATE third_party)
+add_executable(binary_generator source/generate_binary.cpp)
 
-target_link_libraries(main PRIVATE imgui imnodes imguifiledialogs glfw OpenGL::GL)
+# JSON, ImGui and GLFW
+target_include_directories(turing_machine_creator PRIVATE third_party)
+
+target_link_libraries(turing_machine_creator PRIVATE imgui imnodes imguifiledialogs glfw OpenGL::GL)

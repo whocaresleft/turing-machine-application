@@ -11,7 +11,6 @@
 #include <condition_variable>
 #include <thread>
 #include <atomic>
-#include <stop_token>
 #include <future>
 
 namespace mdt {
@@ -68,7 +67,7 @@ namespace mdt {
         std::atomic<bool> terminated{false};
 
         /// Thread that handles the execution of the computation
-        std::jthread worker;
+        std::thread worker;
         std::promise<void> done_promise;
         std::future<void> done_future;
 
@@ -79,6 +78,13 @@ namespace mdt {
 
         /// Default constructor
         computation() : done_future{done_promise.get_future()} {};
+
+        ~computation() {
+            stop();
+            if (worker.joinable()) {
+                worker.join();
+            }
+        }
 
         /**
          * @brief Specifies the alphabet to use for translating symbols to characters and vice versa
@@ -113,7 +119,7 @@ namespace mdt {
          * @param t Tape that will be used by the machine
          * @param index Number of the tape to set
          */
-        void use_tape(tape t, int index) const {
+        void use_tape(tape t, int index) {
             if (index >= K) return;
             tapes[index] = t;
         }
@@ -187,19 +193,19 @@ namespace mdt {
          */
         void start() {
             if (!w.empty()) write_input_string();
-            worker = std::jthread([this](std::stop_token st) {
+            worker = std::thread([this] {
                 for (int i = 0; i < K; i++)
                     shift_head(0, i);
                 transition_cnt = 0;
 
-               while (!stopped && !st.stop_requested() && !terminated) {
+               while (!stopped && !terminated) {
                    {
                        std::unique_lock<std::mutex> lock(mtx);
-                       cv.wait(lock, [this, &st] {
-                          return !paused || st.stop_requested();
+                       cv.wait(lock, [this] {
+                          return !paused;
                        });
                    }
-                   if (stopped || st.stop_requested()) break;
+                   if (stopped) break;
                    step();
                    transition_cnt++;
                }
@@ -211,6 +217,7 @@ namespace mdt {
          * @bried Paused the execution of this Turing Machine
          */
         void pause() {
+            std::lock_guard<std::mutex> lock(mtx);
             if (!terminated && !stopped) paused = true;
         }
 
@@ -225,10 +232,13 @@ namespace mdt {
          * @brief Resumes the execution of a previously paused Turing Machine
          */
         void resume() {
-            if (!paused || stopped || terminated) return;
             {
                 std::lock_guard<std::mutex> lock(mtx);
-                paused = false;
+                if (paused && !stopped && !terminated) {
+                    paused = false;
+                } else {
+                    return;
+                }
             }
             cv.notify_all();
         }
@@ -241,8 +251,15 @@ namespace mdt {
          * @note The 'terminated' flag will not be set to true, but 'stopped' will
          */
         void stop() {
-            stopped = true;
+            {
+                std::lock_guard<std::mutex> lock(mtx);
+                stopped = true;
+            }
             cv.notify_all();
+
+            if (worker.joinable()) {
+                worker.join();
+            }
         }
 
         /**
@@ -252,7 +269,8 @@ namespace mdt {
          *
          * @return True if the Turing Machine has terminated on the given input string, False otherwise
          */
-        [[nodiscard]] bool has_terminated() const {
+        [[nodiscard]] bool is_terminated() {
+            std::lock_guard<std::mutex> lock(mtx);
             return terminated;
         }
 
@@ -272,14 +290,16 @@ namespace mdt {
          *
          * @return True if the Turing Machine is mid-computation, and paused, False otherwise
          */
-        [[nodiscard]] bool is_paused() const {
+        [[nodiscard]] bool is_paused() {
+            std::lock_guard<std::mutex> lock(mtx);
             return paused;
         }
 
         /**
          * @brief Tells whether the Turing Machine was forcefully stopped or not
          */
-        [[nodiscard]] bool was_stopped() const {
+        [[nodiscard]] bool is_stopped() {
+            std::lock_guard<std::mutex> lock(mtx);
             return stopped;
         }
 

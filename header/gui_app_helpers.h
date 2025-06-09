@@ -7,6 +7,7 @@
 
 #include <optional>
 #include <algorithm>
+#include <set>
 #include "helper.h"
 #include "alphabet.h"
 
@@ -77,6 +78,7 @@ namespace gui_app {
             next_link_id = 20000;
         }
 
+        static char content[500];
         static std::vector<State> states;
         static std::vector<Transition> transitions;
         static std::vector<Transition> self_loops;
@@ -301,15 +303,106 @@ namespace gui_app {
             }
 
             mdt["Transitions"] = trans;
+
+            // Tape
+            mdt::tape t{500};
+            for (char x : content) {
+                if (x == '\0') break;
+                t.write(alph->get_symbol(x).value());
+                t.move_dx();
+            }
+            while (t.move_sx()) {}
+
             json j_alph = mdt::serialize_alphabet(alph.value());
+            json j_tpe = mdt::serialize_tape(t);
 
             mdt::json_to_file(mdt, file_path);
             std::string alph_path = file_path.substr(0, file_path.find(".json")) + "_alph.json";
             mdt::json_to_file(j_alph, alph_path);
+            std::string tpe_path = file_path.substr(0, file_path.find(".json")) + "_tpe.json";
+            mdt::json_to_file(j_tpe, tpe_path);
         }
 
-    };
+        static void load_all_from_file(std::string file_path) {
 
+            const std::string alphabet_file = file_path.substr(0, file_path.find(".json")) + "_alph.json";
+            const std::string tape_path = file_path.substr(0, file_path.find(".json")) + "_tpe.json";
+
+            json j_TM;
+            mdt::json_from_file(j_TM, file_path);
+
+            json j_alph;
+            mdt::json_from_file(j_alph, alphabet_file);
+
+            json j_tpe;
+            mdt::json_from_file(j_tpe, tape_path);
+
+            std::optional<mdt::tape> opt_t = mdt::deserialize_tape(j_tpe);
+            if (!opt_t.has_value()) return;
+            mdt::tape t = opt_t.value();
+
+            std::optional<mdt::alphabet> opt_a = mdt::deserialize_alphabet(j_alph);
+            if (!opt_a.has_value()) return;
+            mdt::alphabet a = opt_a.value();
+
+            constexpr char rep = '\0';
+            strncpy(content, &rep, 500);
+            std::vector<mdt::symbol> tape = t.get_content();
+            /////for (int i = 0; i < t.size(); i++) {
+            ///    FSM::content[i] = a.get_representation(tape[i]).value_or('\0');
+            //}
+
+            states.clear();
+            FSM::init();
+            for (int i = 0; i < j_TM["#States"].get<int>(); i++) {
+                FSM::add_state(ImVec2(i * 30, 0));
+            }
+
+            std::set<mdt::state> finals = j_TM["FStates"].get<std::set<mdt::state>>();
+            for (mdt::state s : finals) {
+                FSM::states[ s ].final = true;
+            }
+            self_loops.clear();
+            transitions.clear();
+
+            json trans = j_TM["Transitions"].get<json>();
+            std::vector<mdt::symbol> x, y;
+            for (auto w = trans.begin(); w != trans.end(); ++w) {
+                mdt::state q = (*w)["q"].get<mdt::state>();
+                x = (*w)["x"].get<std::vector<mdt::symbol>>();
+                mdt::state e = (*w)["t"].get<mdt::state>();
+                y = (*w)["a"].get<std::vector<mdt::symbol>>();
+
+                write_transition(q, x, y, e, a);
+            }
+
+        }
+
+    private:
+        static void write_transition(int q, std::vector<int> x, std::vector<int> y, int e, mdt::alphabet a) {
+            std::stringstream ss;
+            for (int x_i : x) {
+                ss << a.get_representation(x_i).value_or('*');
+            }
+            ss << '/';
+            for (int y_i : y) {
+                if (y_i == a.symbol_count()) ss << 'R';
+                else if (y_i == a.symbol_count() + 1) ss << 'L';
+                else ss << a.get_representation(y_i).value_or('*');
+            }
+
+            const std::string label = ss.str();
+
+            // self loop
+            if (q == e) {
+                FSM::add_self_loop(q * 3 + 1);
+                strncpy(FSM::self_loops.rbegin()->label_buffer, label.c_str(), 128);
+            } else {
+                FSM::add_transition((q * 3 + 3), (e * 3 + 2));
+                strncpy(FSM::transitions.rbegin()->label_buffer, label.c_str(), 128);
+            }
+        }
+    };
 
 
 }
