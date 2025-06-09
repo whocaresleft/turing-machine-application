@@ -6,12 +6,13 @@
 #define HELPER_H
 
 #include <fstream>
+#include <variant>
 
 #include "definitions.h"
 #include "alphabet.h"
 #include "turing_machine.h"
 #include "tape.h"
-#include "nlohmann/json.hpp"
+#include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
 namespace mdt {
@@ -325,7 +326,7 @@ namespace mdt {
      * @param filename File name, no extension
      */
     static void json_to_file(const json& j, const std::string& filename) {
-        std::ofstream file(filename + ".json");
+        std::ofstream file(filename);
         file << j.dump();
     }
 
@@ -337,7 +338,7 @@ namespace mdt {
      * @param filename File name, no extension
      */
     static void json_from_file(json& j, const std::string& filename) {
-        std::ifstream file(filename + ".json");
+        std::ifstream file(filename);
         file >> j;
     }
 

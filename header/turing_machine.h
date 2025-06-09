@@ -5,7 +5,6 @@
 #include "couple.h"
 #include <unordered_map>
 #include <array>
-#include <cstdint>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -178,7 +177,7 @@ namespace mdt {
          * @return True if the state is final, False otherwise
          */
         [[nodiscard]] bool is_final_state(const state state) const {
-            return final_states.contains(state);
+            return final_states.find(state) != final_states.end();
         }
 
         /**

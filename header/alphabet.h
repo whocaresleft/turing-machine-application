@@ -38,7 +38,7 @@ namespace mdt {
          * @param symbol Character to add to this alphabet
          */
         void add_symbol(const char& symbol) {
-            if (map.contains(symbol)) return;
+            if (map.find(symbol) != map.end()) return;
             inverse[count] = symbol;
             map[symbol] = count;
             count++;
@@ -66,7 +66,7 @@ namespace mdt {
          */
         std::optional<symbol> get_symbol(const char& symbol) {
             if (symbol == blank_char) return {blank};
-            return map.contains(symbol) ? std::optional(map[symbol]) : std::nullopt;
+            return (map.find(symbol) != map.end()) ? std::optional(map[symbol]) : std::nullopt;
         }
 
         /**
@@ -78,7 +78,7 @@ namespace mdt {
          */
         std::optional<char> get_representation(const symbol& symbol) {
             if (symbol == blank) return {blank_char};
-            return inverse.contains(symbol) ? std::optional(inverse[symbol]) : std::nullopt;
+            return (inverse.find(symbol) != inverse.end()) ? std::optional(inverse[symbol]) : std::nullopt;
         }
 
         /**
