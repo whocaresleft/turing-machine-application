@@ -1,21 +1,27 @@
-#include "turing_machine.h"
-#include "tape.h"
-#include "alphabet.h"
-#include <nlohmann/json.hpp>
-#include "computation.h"
-#include "helper.h"
+#include "../../header/turing_machine.h"
+#include "../../header/tape.h"
+#include "../../header/alphabet.h"
+#include "../../third_party/nlohmann/json.hpp"
+#include "../../header/computation.h"
+#include "../../header/helper.h"
+#include <iostream>
+
 constexpr int K = ${K};
-int main() {return 0;}
-inline int execution(const std::string &machine_file, const std::string &alphabet_file, const std::string &tape_file) {
+
+int main(int argc, char const *argv[]) {
+    if (argc != 4) {
+        std::cerr << "Usage: turing_machine_" << K << " <machine_json_file_path> <alphabet_json_file_path> <tape_json_file_path>" << std::endl;
+        return -1;
+    }
 
     json j_machine;
-    mdt::json_from_file(j_machine, machine_file);
+    mdt::json_from_file(j_machine, argv[1]);
 
     json j_alph;
-    mdt::json_from_file(j_alph, alphabet_file);
+    mdt::json_from_file(j_alph, argv[2]);
 
     json j_tape;
-    mdt::json_from_file(j_tape, tape_file);
+    mdt::json_from_file(j_tape, argv[3]);
 
     const std::optional<mdt::turing_machine<K>> opt_m = mdt::deserialize_turing_machine<K>(j_machine);
     if (!opt_m.has_value()) return -1;
@@ -35,8 +41,17 @@ inline int execution(const std::string &machine_file, const std::string &alphabe
     comp.use_tape(t, 0);
     comp.use_machine(M);
 
+    std::cout<<"Initial configuration:" << std::endl;
+    std::cout<<comp.output();
+
     comp.start();
     comp.wait_for_termination();
+
+    std::cout<<"After computation:" << std::endl;
+    std::cout<<comp.output();
+    std::cout<<"The machine ";
+    std::cout << (comp.has_accepted() ? "accepted" : "did not accept");
+    std::cout << " the input string";
 
     return 0;
 }

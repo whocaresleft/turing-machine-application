@@ -305,10 +305,10 @@ namespace gui_app {
             mdt["Transitions"] = trans;
 
             // Tape
-            mdt::tape t{500};
+            mdt::tape t{strlen(content)};
             for (char x : content) {
                 if (x == '\0') break;
-                t.write(alph->get_symbol(x).value());
+                t.write(alph->get_symbol(x).value_or(mdt::blank));
                 t.move_dx();
             }
             while (t.move_sx()) {}
@@ -347,10 +347,12 @@ namespace gui_app {
 
             constexpr char rep = '\0';
             strncpy(content, &rep, 500);
-            std::vector<mdt::symbol> tape = t.get_content();
-            /////for (int i = 0; i < t.size(); i++) {
-            ///    FSM::content[i] = a.get_representation(tape[i]).value_or('\0');
-            //}
+            mdt::symbol read;
+            for (int i = 0; i < 500; i++) {
+                read = t.read();
+                FSM::content[i] = a.get_representation(read).value_or('\0');
+                t.move_dx();
+            }
 
             states.clear();
             FSM::init();

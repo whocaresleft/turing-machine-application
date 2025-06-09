@@ -6,13 +6,11 @@
 #define HELPER_H
 
 #include <fstream>
-#include <variant>
-
 #include "definitions.h"
 #include "alphabet.h"
 #include "turing_machine.h"
 #include "tape.h"
-#include <nlohmann/json.hpp>
+#include "../third_party/nlohmann/json.hpp"
 using json = nlohmann::json;
 
 namespace mdt {
