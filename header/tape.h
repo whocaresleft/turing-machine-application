@@ -88,8 +88,8 @@ namespace mdt {
          */
         bool move_dx() {
             if (head == max_size) return false;
-            if (head == content.size()) content.push_back(blank);
             head++;
+            if (head == content.size()) content.push_back(blank);
             return true;
         }
 
