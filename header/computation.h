@@ -83,10 +83,15 @@ namespace mdt {
         /// String that will be written on the input tape at the start of the computation. This allows for multiple computations
         std::string w;
 
+        void future() {
+            done_promise = std::promise<void>();
+            done_future = done_promise.get_future();
+        }
+
     public:
 
         /// Default constructor
-        computation() : done_future{done_promise.get_future()} {};
+        computation() { future(); };
 
         /**
          * @brief Specifies the alphabet to use for translating symbols to characters and vice versa
@@ -148,9 +153,15 @@ namespace mdt {
             }
             x = out.value().second;
             for (int i = 0; i < K; i++) {
-                if (x[i] == M.dx()) tapes[i].move_dx();
-                else if (out.value().second[i] == M.sx()) tapes[i].move_sx();
-                else tapes[i].write(x[i]);
+                if (x[i] == M.dx()) {
+                    tapes[i].move_dx();
+                }
+                else if (out.value().second[i] == M.sx()) {
+                    tapes[i].move_sx();
+                }
+                else {
+                    tapes[i].write(x[i]);
+                }
             }
             current = out.value().first;
             return true;
@@ -194,23 +205,26 @@ namespace mdt {
          * @note If a Turing Machine loops indefinitely, use stop to force terminate it
          */
         void start() {
+            future();
             if (!w.empty()) write_input_string();
             worker = std::jthread([this](std::stop_token st) {
                 for (int i = 0; i < K; i++)
                     shift_head(0, i);
-                transition_cnt = 0;
+                {
+                    std::lock_guard<std::mutex> lock(mtx);
+                    transition_cnt = 0;
+                }
 
-               while (!stopped && !st.stop_requested() && !terminated) {
-                   {
-                       std::unique_lock<std::mutex> lock(mtx);
-                       cv.wait(lock, [this, &st] {
-                          return !paused || st.stop_requested();
-                       });
-                   }
-                   if (stopped || st.stop_requested()) break;
-                   step();
-                   transition_cnt++;
-               }
+                while (true) {
+                    std::unique_lock<std::mutex> lock(mtx);
+                    cv.wait(lock, [this, &st] {
+                        return stopped ||  st.stop_requested() || terminated || !paused;
+                    });
+                    if (stopped || st.stop_requested() || terminated) break;
+                    lock.unlock();
+                    if (step())
+                        transition_cnt++;
+                }
                 done_promise.set_value();
             });
         }
@@ -219,7 +233,8 @@ namespace mdt {
          * @bried Paused the execution of this Turing Machine
          */
         void pause() {
-            if (!terminated && !stopped) paused = true;
+            if (terminated.load() || stopped.load()) return;
+            paused.store(true);
         }
 
         /**
@@ -233,12 +248,12 @@ namespace mdt {
          * @brief Resumes the execution of a previously paused Turing Machine
          */
         void resume() {
-            if (!paused || stopped || terminated) return;
+            if (!paused.load() || stopped.load() || terminated.load()) return;
             {
                 std::lock_guard<std::mutex> lock(mtx);
-                paused = false;
+                paused.store(false);
             }
-            cv.notify_all();
+            cv.notify_one();
         }
 
         /**
@@ -249,8 +264,9 @@ namespace mdt {
          * @note The 'terminated' flag will not be set to true, but 'stopped' will
          */
         void stop() {
-            stopped = true;
+            stopped.store(true);
             cv.notify_all();
+            if (worker.joinable()) worker.request_stop();
         }
 
         /**
@@ -316,8 +332,9 @@ namespace mdt {
             if (index >= K || index < 0) return "";
             std::vector<char> v;
             v.reserve(tapes[index].size() + 3);
-            for (symbol s : tapes[index].get_content())
+            for (symbol s : tapes[index].get_content()) {
                 v.push_back(alph.get_representation(s).value_or(alphabet::blank_char));
+            }
             v.push_back('.');
             v.push_back('.');
             v.push_back('.');
@@ -340,7 +357,6 @@ namespace mdt {
                 for (int i = 1; i < K; i++) tapes[i].write(blank);
                 for (int i = 0; i < K; i++) tapes[i].move_dx();
             }
-            for (int i = 0; i < K; i++) shift_head(0, i);
         }
 
         /**
