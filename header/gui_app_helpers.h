@@ -344,7 +344,7 @@ namespace gui_app {
             mdt::json_to_file(j_tpe, tpe_path);
         }
 
-        static void load_all_from_file(std::string file_path) {
+        static void load_all_from_file(const std::string& file_path) {
 
             const std::string alphabet_file = file_path.substr(0, file_path.find(".json")) + "_alph.json";
             const std::string tape_path = file_path.substr(0, file_path.find(".json")) + "_tpe.json";
@@ -457,10 +457,50 @@ namespace gui_app {
             // self loop
             if (q == e) {
                 FSM::add_self_loop(q * 3 + 1);
-                strncpy(FSM::self_loops.rbegin()->labels[0].data(), label.c_str(), 128);
+                add_label_to_self_loop(q * 3 + 1, label);
             } else {
                 FSM::add_transition((q * 3 + 3), (e * 3 + 2));
-                strncpy(FSM::transitions.rbegin()->labels[0].data(), label.c_str(), 128);
+                add_label_to_transition((q * 3 + 3), (e * 3 + 2), label);
+            }
+        }
+
+        static void add_label_to_self_loop(const int state_id, const std::string& label) {
+            for (Transition& t : self_loops) {
+                if (t.id == state_id) {
+                    if (t.labels.size() == 1) {
+                        if (t.labels[0].empty()) {
+                            strncpy(t.labels[0].data(), label.c_str(), 128);
+                        }
+                        else {
+                            t.labels.push_back(std::array<char, 128>({'\0'}));
+                            strncpy(t.labels[1].data(), label.c_str(), 128);
+                        }
+                    }else {
+                        const int size = t.labels.size();
+                        t.labels.push_back(std::array<char, 128>({'\0'}));
+                        strncpy(t.labels[size].data(), label.c_str(), 128);
+                    }
+                }
+            }
+        }
+
+        static void add_label_to_transition(const int from_state, const int to_state, const std::string& label) {
+            for (Transition& t : transitions) {
+                if (t.from_state == from_state && t.to_state == to_state) {
+                    if (t.labels.size() == 1) {
+                        if (t.labels[0].empty()) {
+                            strncpy(t.labels[0].data(), label.c_str(), 128);
+                        }
+                        else {
+                            t.labels.push_back(std::array<char, 128>({'\0'}));
+                            strncpy(t.labels[1].data(), label.c_str(), 128);
+                        }
+                    }else {
+                        const int size = t.labels.size();
+                        t.labels.push_back(std::array<char, 128>({'\0'}));
+                        strncpy(t.labels[size].data(), label.c_str(), 128);
+                    }
+                }
             }
         }
     };
