@@ -17,7 +17,7 @@ std::string extension = ".exe";
 #endif
 
 #ifdef linux
-std::string extension = "";
+std::string extension;
 #endif
 /* This file will look for, given an integer K as command line, an executable named turing_machine_K in the current folder
  * If it does, no problemo, otherwise, it will look in the template folder and generate a .cpp file that declares

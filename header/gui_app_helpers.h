@@ -345,7 +345,6 @@ namespace gui_app {
         }
 
         static void load_all_from_file(const std::string& file_path) {
-
             const std::string alphabet_file = file_path.substr(0, file_path.find(".json")) + "_alph.json";
             const std::string tape_path = file_path.substr(0, file_path.find(".json")) + "_tpe.json";
 
@@ -369,11 +368,12 @@ namespace gui_app {
             constexpr char rep = '\0';
             strncpy(content, &rep, 500);
             mdt::symbol read;
-            for (int i = 0; i < 500; i++) {
-                read = t.read();
-                FSM::content[i] = a.get_representation(read).value_or('\0');
-                t.move_dx();
-            }
+            if (t.size() > 0)
+                for (int i = 0; i < 500; i++) {
+                    read = t.read();
+                    FSM::content[i] = a.get_representation(read).value_or('\0');
+                    t.move_dx();
+                }
 
             states.clear();
             FSM::init();
@@ -468,7 +468,7 @@ namespace gui_app {
             for (Transition& t : self_loops) {
                 if (t.id == state_id) {
                     if (t.labels.size() == 1) {
-                        if (t.labels[0].empty()) {
+                        if (t.labels[0][0] == '\0') {
                             strncpy(t.labels[0].data(), label.c_str(), 128);
                         }
                         else {
@@ -480,6 +480,7 @@ namespace gui_app {
                         t.labels.push_back(std::array<char, 128>({'\0'}));
                         strncpy(t.labels[size].data(), label.c_str(), 128);
                     }
+                    break;
                 }
             }
         }
@@ -488,7 +489,7 @@ namespace gui_app {
             for (Transition& t : transitions) {
                 if (t.from_state == from_state && t.to_state == to_state) {
                     if (t.labels.size() == 1) {
-                        if (t.labels[0].empty()) {
+                        if (t.labels[0][0] == '\0') {
                             strncpy(t.labels[0].data(), label.c_str(), 128);
                         }
                         else {
@@ -500,6 +501,7 @@ namespace gui_app {
                         t.labels.push_back(std::array<char, 128>({'\0'}));
                         strncpy(t.labels[size].data(), label.c_str(), 128);
                     }
+                    break;
                 }
             }
         }

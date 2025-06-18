@@ -17,7 +17,7 @@
 #include <cmath>
 #include <imnodes/imnodes.h>
 #include "imnodes_internal.h"
-#include <imguifiledialog/ImGuiFileDialog.h>
+#include <tinyfiledialogs/tinyfiledialogs.h>
 #include "../header/gui_app_helpers.h"
 
 using namespace gui_app;
@@ -29,9 +29,9 @@ namespace gui_app {
     int FSM::next_link_id = 20000;
     char FSM::content[500];
 }
-void draw_self_loop(ImDrawList* draw_list, const ImVec2 node_pos, Transition t, const ImU32 color, const float thickness);
+void draw_self_loop(ImDrawList* draw_list, ImVec2 node_pos, Transition t, ImU32 color, float thickness);
 int main () {
-    const char a = '\0';
+    constexpr char a = '\0';
     strncpy(FSM::content, &a, 500);
     // Init GLFW
     if (!glfwInit()) {
@@ -39,12 +39,10 @@ int main () {
         return -1;
     }
 
-    // Richiedi un contesto OpenGL 3.3 Core
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // Crea la finestra
     GLFWwindow* window = glfwCreateWindow(1280, 720, "Turing Machine Application", nullptr, nullptr);
     if (!window) {
         std::cerr << "Failed to create GLFW window\n";
@@ -52,15 +50,12 @@ int main () {
         return -1;
     }
     glfwMakeContextCurrent(window);
-    glfwSwapInterval(1); // VSync
-
-    // (GL loader qui, se usi glad/glew — saltato in questo esempio)
-
+    glfwSwapInterval(1);
 
     // Init ImGui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    const ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui::StyleColorsDark();
 
     ImNodes::CreateContext();
@@ -127,26 +122,28 @@ int main () {
 
                 ImGui::SameLine();
                 if (ImGui::Button("Save")) {
-                    ImGuiFileDialog::Instance() -> OpenDialog("save-tm", "Save", ".json", IGFD::FileDialogConfig{.path = ".",});
-                }
-                if (ImGuiFileDialog::Instance() -> Display("save-tm")) {
-                    if (ImGuiFileDialog::Instance()->IsOk()) {
-                        std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-                        FSM::save_all_to_file(file_path);
+                    const char* file_path = tinyfd_saveFileDialog(
+                            "Save",
+                            ".json",
+                            0, nullptr,
+                            nullptr
+                        );
+                    if (file_path) {
+                        FSM::save_all_to_file(std::string{file_path});
                     }
-                    ImGuiFileDialog::Instance()->Close();
                 }
 
                 ImGui::SameLine();
                 if (ImGui::Button("Load")) {
-                    ImGuiFileDialog::Instance() -> OpenDialog("load-tm", "Load", ".json", IGFD::FileDialogConfig{.path = ".",});
-                }
-                if (ImGuiFileDialog::Instance() -> Display("load-tm")) {
-                    if (ImGuiFileDialog::Instance()->IsOk()) {
-                        std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
-                        FSM::load_all_from_file(file_path);
+                    const char* file_path = tinyfd_openFileDialog(
+                            "Load",
+                            ".json",
+                            0, nullptr,
+                            nullptr, 0
+                        );
+                    if (file_path) {
+                        FSM::load_all_from_file(std::string{file_path});
                     }
-                    ImGuiFileDialog::Instance()->Close();
                 }
 
                 // Add one more transition
@@ -204,7 +201,7 @@ int main () {
                     ImNodes::BeginNode(s.id.state_id);
 
                     ImNodes::BeginNodeTitleBar();
-                    ImGui::Text(s.label.c_str());
+                    ImGui::Text("%s", s.label.c_str());
                     ImNodes::EndNodeTitleBar();
 
                     ImNodes::BeginInputAttribute(s.id.in_id);
@@ -243,14 +240,14 @@ int main () {
                         midpoint.y + text_size.y * 0.5f
                         ) : ImVec2(
                         midpoint.x - text_size.x * 0.5f,
-                        midpoint.y + text_size.y * 5.0f // Meh kinda
+                        midpoint.y + text_size.y * 5.0f // Meh, kinda
                         );
 
                     // Draw the text label
                     for (int i = 0; i < t.labels.size(); i++) {
                         ImDrawList* draw_list = ImGui::GetWindowDrawList();
                         draw_list->AddText(
-                            text_pos + ImVec2(0, -25 * i),
+                            text_pos + ImVec2(0.0f, -25 * static_cast<float>(i)),
                             IM_COL32(220, 220, 220, 255),  // White color
                             t.labels[i].data()
                         );
@@ -369,7 +366,7 @@ void draw_self_loop(ImDrawList* draw_list, const ImVec2 node_pos, Transition t, 
     // Draw the text label
     for (int i = 0; i < t.labels.size(); i++) {
         draw_list->AddText(
-            node_pos + ImVec2(-20, -75) + ImVec2(0, -25 * i),
+            node_pos + ImVec2(-20, -75) + ImVec2(0, -25 * static_cast<float>(i)),
             IM_COL32(220, 220, 220, 255),
             t.labels[i].data()
         );

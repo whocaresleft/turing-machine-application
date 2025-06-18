@@ -31,11 +31,9 @@ target_link_libraries(imgui PRIVATE glfw OpenGL::GL)
 add_library(imnodes STATIC third_party/imnodes/imnodes.cpp)
 target_include_directories(imnodes PUBLIC third_party/imnodes)
 
-add_library(imguifiledialogs STATIC third_party/imguifiledialog/ImGuiFileDialog.cpp)
-target_include_directories(imguifiledialogs PUBLIC
-        third_party/imguifiledialog
-        third_party/imguifiledialog/dirent
-        third_party/imguifiledialog/stb
+add_library(tinyfiledialogs STATIC third_party/tinyfiledialogs/tinyfiledialogs.cpp)
+target_include_directories(tinyfiledialogs PUBLIC
+        third_party/tinyfiledialogs
 )
 
 add_executable(turing_machine_creator source/gui_app.cpp
@@ -46,10 +44,10 @@ add_executable(turing_machine_creator source/gui_app.cpp
         header/gui_app_helpers.h
 )
 #idk how to on linux, will look at it later
-set_target_properties(turing_machine_creator PROPERTIES WIN32_EXECUTABLE TRUE)
+#set_target_properties(turing_machine_creator PROPERTIES WIN32_EXECUTABLE TRUE)
 add_executable(binary_generator source/generate_binary.cpp)
 
 # JSON, ImGui and GLFW
 target_include_directories(turing_machine_creator PRIVATE third_party)
 
-target_link_libraries(turing_machine_creator PRIVATE imgui imnodes imguifiledialogs glfw OpenGL::GL)
+target_link_libraries(turing_machine_creator PRIVATE imgui imnodes tinyfiledialogs glfw OpenGL::GL)
