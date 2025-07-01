@@ -378,7 +378,7 @@ namespace gui_app {
             states.clear();
             FSM::init();
             for (int i = 0; i < j_TM["#States"].get<int>(); i++) {
-                FSM::add_state(ImVec2(i * 30, 0));
+                FSM::add_state(ImVec2(i * 100, 0));
             }
 
             std::set<mdt::state> finals = j_TM["FStates"].get<std::set<mdt::state>>();
@@ -456,10 +456,12 @@ namespace gui_app {
 
             // self loop
             if (q == e) {
-                FSM::add_self_loop(q * 3 + 1);
+                if (is_first(q * 3 + 1))
+                    FSM::add_self_loop(q * 3 + 1);
                 add_label_to_self_loop(q * 3 + 1, label);
             } else {
-                FSM::add_transition((q * 3 + 3), (e * 3 + 2));
+                if (is_first(q * 3 + 3, e * 3 + 2))
+                    FSM::add_transition((q * 3 + 3), (e * 3 + 2));
                 add_label_to_transition((q * 3 + 3), (e * 3 + 2), label);
             }
         }
@@ -504,6 +506,22 @@ namespace gui_app {
                     break;
                 }
             }
+        }
+
+        static bool is_first(const int self_loop_id) {
+            for (const Transition& t : self_loops) {
+                if (t.id == self_loop_id)
+                    return false;
+            }
+            return true;
+        }
+
+        static bool is_first(const int from_state, const int to_state) {
+            for (const Transition& t : transitions) {
+                if (t.from_state == from_state && t.to_state == to_state)
+                    return false;
+            }
+            return true;
         }
     };
 
