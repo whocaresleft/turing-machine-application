@@ -2,6 +2,8 @@
 
 This project aimed to implement a K-tape Turing Machine, based on the definition I've learned during the course of "Informatica Teorica" (Mainly Theory of Computability and Theory of Complexity) at University of Florence "UniFI", both as a set of C++ libraries as well as a GUI app.
 
+rust-version contains a Rust implementation of the same idea, used with the goal of learning the language.
+
 ## Installation
 
 There is no need for any installation, the libraries (for the simulations) are header only and the app is already builded (at least for Windows now)
@@ -10,10 +12,15 @@ There is no need for any installation, the libraries (for the simulations) are h
 As I previously said, the project is divided into a GUI app, for creating and editing Turing Machines that can be executed, a simple binary to generate an example of a simulation runner and the set of libraries.
 
 ### App
-The GUI app uses a combination of ImGui + ImNodes + ImGuiFileDialogs + GLFW + OpenGL3. It can be used to create, save, load and edit Turing Machines.
+[c++] The GUI app uses a combination of ImGui + ImNodes + ImGuiFileDialogs + GLFW + OpenGL3. It can be used to create, save, load and edit Turing Machines.
+[Rust] There is no GUI out yet. It can still be used inside code as a library.
+
+
+### Information
+Everything reported from now on is valid only for the C++ version.
 
 ### Binary generator
-Since the Turing Machine is implemented with K as a template argument, I couldn't create one runtime with the needed K. So I thought of creating an executable that is used to generate a simple simulation runner based on the given 'K', it searches if the executable "turing_machine_K" exists, if it doesn't, it uses a template simple cpp file to generate that particular binary. Still, the most flexible way to use these libraries is to just include them and use them, with a known K, in the code.
+Since the Turing Machine is implemented with K as a template argument, I couldn't create one runtime with the needed K. So I thought of creating an executable that is used to generate a simple simulation runner based on the given 'K', it searches if the executable "turing_machine_K" exists, if it doesn't, it uses a template simple cpp file to generate that particular binary. Still, the most flexible way to use these libraries is to just include them and use them, with a known K, in the code. 
 
 ```bash
 Example
